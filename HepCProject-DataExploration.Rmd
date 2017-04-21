@@ -1,0 +1,220 @@
+---
+title: "ICD Table Analysis"
+author: "Cindy Kartman"
+date: "March 5, 2017"
+output: word_document
+---
+
+```{r}
+#############DIAGNOSIS ICD Table#############
+
+library(readr)
+
+
+#diagnosis_icd<-read_delim("Z:/RawData/TextFormat/Diagnosis_ICD.txt", "|", escape_double = FALSE, trim_ws = TRUE)
+diagnosis_icd<-read_delim("Z:/Hepatitis C Project/RawData/TextFormat/Diagnosis_ICD.txt", "|", escape_double = FALSE, trim_ws = TRUE)#Cindy's data path
+
+str(diagnosis_icd)#8,536,894 obs. of  7 variables
+head(diagnosis_icd)
+
+#exploring number of unique values, what the unique values are, # of rows with values it and the # of rows with NA's
+length(unique(diagnosis_icd$dx_rank))
+table(diagnosis_icd$dx_rank)
+sum(!is.na(diagnosis_icd$dx_rank))
+sum(is.na(diagnosis_icd$dx_rank))
+
+#changing structure of field with date
+hep_c_patients$enc_date <- as.Date(as.character(as.POSIXct("2013-01-01 07:00")))
+hep_c_patients$enc_date <- gsub(" 00:00:00", "", hep_c_patients$enc_dt_ds)
+#hep_c_patients$enc_date <- as.Date(hep_c_patients$enc_date , format="%Y-%m-%d")
+
+#Match "070" to icd dx column - 070 is prefix for Viral hepatitis so it includes all types of Hep C and it picks up other unrelated icd codes with "070" within
+hep_c_icd_dx_v1 <- diagnosis_icd[grep("070", diagnosis_icd$icd_dx),] #grep search for matches to "070" within each element of a character vector:
+dim(hep_c_icd_dx_v1)#30,153 rows
+table(hep_c_icd_dx_v1$icd_dx)
+table(hep_c_icd_dx_v1$icd_diagnosis)
+length(unique(hep_c_icd_dx_v1$patient_id)) #4063 unique patient id's
+```
+
+```{r}
+##Match icd 9 codes that have "Hepatitis C" in the description
+hep_c_icd_dx_v2 <- subset(diagnosis_icd, 
+                        icd_dx == "V02.62" | #Carrier or suspected carrier of Hep C (icd9)
+                        icd_dx == "Z2252" | #Carrier or suspected carrier of Hep C (icd10)
+                        icd_dx == "V12.09" | #Hepatitis C, history of (icd9)
+                        icd_dx == "070.41" | #Acute hepatitis C with hepatic coma (icd9)
+                        icd_dx == "070.44" | #Chronic hepatitis C with hepatic coma (icd9)
+                        icd_dx == "070.51" | #Acute hepatitis C without mention of hepatic coma (icd9)
+                        icd_dx == "070.54" | #Chronic hepatitis C without mention of hepatic coma; reat that it can be used as hep c in remission (icd9)
+                        icd_dx == "070.7" | #Unspecified viral hepatitis C (icd9)
+                        icd_dx == "070.70" | #Unspecified viral hepatitis C without hepatic coma (icd9)
+                        icd_dx == "070.71" | #Unspecified viral hepatitis C with hepatic coma (icd9)
+                        icd_dx == "B182"  | #Chronic viral hepatitis C (icd10)
+                        icd_dx == "B1920" | #Unspecified viral hepatitis C without hepatic coma (icd10)
+                        icd_dx == "B1710" | #Acute hepatitis C without hepatic coma (icd10)
+                        icd_dx == "B1921" #Unspecified viral hepatitis C with hepatic coma (icd10)
+                          )
+
+#Codes below were not included - These are icd 10 codes - there doesn't seem to be specific Hep C codes during pregnancy for icd 9
+#"O98411" (icd10) - Viral hepatitis complicating pregnancy, first trimester
+#"O98412" (icd10) - Viral hepatitis complicating pregnancy, second trimester
+#"O9842" (icd10) - "VIRAL HEPATITIS COMPLICATING CHILDBIRTH"  
+#"O98413" (icd10) - "VIRAL HEPATITIS COMP PREGNANCY THIRD TRIMESTER" 
+
+dim(hep_c_icd_dx_v2)#28,199 rows
+table(hep_c_icd_dx_v2$icd_dx)
+table(hep_c_icd_dx_v2$icd_diagnosis)
+
+#Barplot
+hep_c_icd_dx_v2_graph <- barplot(table(hep_c_icd_dx_v2$icd_dx), 
+                                 xlab = "ICD Code", ylab = "Frequency", main = "# of Times ICD Code Appears in ICD Table",
+                                 ylim = c(0, 20000))
+text(hep_c_icd_dx_v2_graph, table(hep_c_icd_dx_v2$icd_diagnosis), labels = table(hep_c_icd_dx_v2$icd_diagnosis), pos = 3)
+
+length(unique(hep_c_icd_dx_v2$patient_id)) #3,787 unique patient id's
+
+#order by patient_id and then by encounter date
+sorted_hep_c_icd_dx_v2 <- hep_c_icd_dx_v2[with(hep_c_icd_dx_v2, order(patient_id, enc_dt_ds)),]
+
+#number of encounters per patient
+num_of_encounters_per_patient <- as.data.frame(aggregate(encounter_id~patient_id, data = hep_c_icd_dx_v2, FUN = length))
+colnames(num_of_encounters_per_patient) <- c("patient_id", "total_num_of_encounters")
+num_of_encounters_per_patient[order(-num_of_encounters_per_patient$total_num_of_encounters),]#sort with most encounters on top
+
+
+#find earilest hep C icd code using aggregate 
+hep_c_patients_first_encounter_date <- aggregate(enc_dt_ds~patient_id,  data = hep_c_icd_dx_v2, min)
+
+#merge with original dataset = to get each unique patients first encounter info
+hep_c_patients_first_encounter_date <- merge(hep_c_patients_first_encounter_date, hep_c_icd_dx_v2)
+####????????????format of date is changed??  Dates are showing up as date and time and date seems to be shifted by one day as if it was rounding up before??????????
+hep_c_patients_first_encounter_date[order(hep_c_patients_first_encounter_date$patient_id),]
+
+sum(hep_c_patients_first_encounter_date$first_encounter_date > "2014-01-01")#1558 patients whose first hep c encounter was after 01-01-2014
+sum(hep_c_patients_first_encounter_date$first_encounter_date > "2015-01-01")#924 patients whose first hep c encounter was after 01-01-2015
+
+
+#Create vector with id numbers of patients with a Hep C icd code
+unique_hep_c_ids <- as.data.frame(unique(hep_c_icd_dx_v2$patient_id))
+colnames(unique_hep_c_ids) <- "PATIENT_ID"
+nrow(unique_hep_c_ids) #3787
+write.csv(unique_hep_c_ids, "Z:/Hepatitis C Project/unique_hep_c_patient_ids.csv")
+```
+
+```{r}
+#Match "Hepatitis" to icd description
+hep_c_icd_diagnosis_v1 <- diagnosis_icd[grep("HEPATITIS", diagnosis_icd$icd_diagnosis),]#grep search for matches to "Hepatitis within each element of a character vector:
+dim(hep_c_icd_diagnosis_v1)#39432 rows
+table(hep_c_icd_diagnosis_v1$icd_diagnosis)
+length(table(hep_c_icd_diagnosis_v1$icd_diagnosis))
+
+#Barplot
+hep_c_icd_diagnosis_v1_graph <- barplot(table(hep_c_icd_diagnosis_v1$icd_dx), 
+                                 xlab = "ICD Code", ylab = "Frequency", main = "# of Times ICD Code Appears in ICD Table", cex.names = .5, 
+                                 ylim = c(0, 20000))
+#text(hep_c_icd_diagnosis_v1_graph, table(hep_c_icd_diagnosis_v1$icd_dx), labels = table(hep_c_icd_diagnosis_v1$icd_dx), cex = .5, pos = 3)
+
+length(unique(hep_c_icd_diagnosis_v1$patient_id)) #6892 unique patient id's
+```
+
+```{r}
+##Match icd 9 codes that have "Hepatitis C" in the description
+hep_c_icd_diagnosis_v2 <- diagnosis_icd[grep("HEPATITIS C", diagnosis_icd$icd_diagnosis),]  #grep search for matches to "Hepatitis C"" within each element of a character vector:
+dim(hep_c_icd_diagnosis_v2)#27445 rows
+table(hep_c_icd_diagnosis_v2$icd_diagnosis)
+length(table(hep_c_icd_diagnosis_v2$icd_diagnosis))
+length(unique(hep_c_icd_diagnosis_v2$patient_id))#3322 unique patient id's
+
+unique(hep_c_icd_diagnosis_v2$icd_dx)
+unique(hep_c_icd_diagnosis_v2$icd_diagnosis)
+```
+
+
+```{r}
+##Combine all table for hep C patients only
+hep_c_patient_encounters <- merge(encounters, unique_hep_c_ids, by.x = "Patient_ID", by.y = "PATIENT_ID", all.x = FALSE, all.y = TRUE)
+dim(hep_c_patient_encounters)
+#order by increasing patient ID and decreaseing encounter date
+hep_c_patient_encounters <- hep_c_patient_encounters[order(hep_c_patient_encounters$Patient_ID, hep_c_patient_encounters$Enc_DT_DS),]
+
+##Merge encounter data with diagnosis icd dataset
+hep_c_patient_merge_1 <- merge(hep_c_patient_encounters, diagnosis_icd, by.x = "Patient_ID", by.y = "patient_id", all.x = TRUE, all.y = FALSE)
+dim(hep_c_patient_merge_1)
+
+##Merge encounter data with cpt dataset
+hep_c_patient_merge_2 <- merge(hep_c_patient_merge_1, cpt, by.x = "Patient_ID", all.x = TRUE, all.y = FALSE)
+
+##Merge encounter data with med at admission
+hep_c_patient_merge_3 <- merge(hep_c_patient_merge_2, med_rec_adm, by.x = "Patient_ID",all.x = TRUE, all.y = FALSE)
+
+##Merge encounter data with meds at discharge
+hep_c_patient_merge_4 <- merge(hep_c_patient_merge_3, med_rec_dc, by.x = "Patient_ID", all.x = TRUE, all.y = FALSE)
+
+##Merge encounter data with med during inpatient stay
+hep_c_patient_merge_5 <- merge(hep_c_patient_merge_4, meds_inpt, by.x = "Patient_ID", all.x = TRUE, all.y = FALSE)
+
+##Merge encounter data with med during outpatient visit
+hep_c_patient_merge_6 <- merge(hep_c_patient_merge_5, meds_outpt, by.x = "Patient_ID", all.x = TRUE, all.y = FALSE)
+
+##Merge encounter data with procedure icd codes
+hep_c_patient_merge_7 <- merge(hep_c_patient_merge_6, procedure_icd, by.x = "Patient_ID", all.x = TRUE, all.y = FALSE)
+
+##Merge encounter data with social data from that encounter
+hep_c_patient_encounters_all <- merge(hep_c_patient_merge_7, social_hx, by = "Patient_ID", all.x = TRUE, all.y = FALSE)
+
+
+
+```
+```{r}
+#rename encounter date and id column
+names(hep_c_patients_first_encounter_date)[names(hep_c_patients_first_encounter_date) == "enc_dt_ds"] <- "first_encounter_date"
+
+names(hep_c_patients_first_encounter_date)[names(hep_c_patients_first_encounter_date) == "encounter_id"] <- "first_encounter_id"
+
+#Merge first encounter date with hep c patient data to add first hep c encounter date and id  
+hep_c_patient_encounters_all <- merge(hep_c_patient_encounters, hep_c_patients_first_encounter_date [, c("patient_id", "first_encounter_date", "first_encounter_id")], by.x = "Patient_ID", by.y = "patient_id", all.x = TRUE, all.y = FALSE)
+
+#creating new column to determine whether encounter is before or after first hep c encounter
+hep_c_patient_encounters_all$before_after_first_encounter <- ifelse(hep_c_patient_encounters_all$Enc_DT_DS >= hep_c_patient_encounters_all$first_encounter_date, "after", "before")
+
+#can filter on before and after
+```
+
+```{r}
+################Demo data for Hep C patients only##############
+demo_hep_c_patients <- subset(demo, PATIENT_ID %in% unique_hep_c_patient_ids$PATIENT_ID) #3785 rows
+
+#remove duplicated rows
+demo_hep_c_patients <- demo_hep_c_patients[!duplicated(demo_hep_c_patients),] #3785 rows
+
+demo_hep_c_patients[order(demo_hep_c_patients$PATIENT_ID),]
+
+#find hep c patients listed with demographic data more than once
+demo_hep_c_patients[duplicated(demo_hep_c_patients$PATIENT_ID),]#0 ids
+
+demo_freq <- as.data.frame(table(demo_hep_c_patients$PATIENT_ID))#3785 unique id's
+
+
+demo_hep_c_patients <- merge(demo_hep_c_patients, education, by.x = "PATIENT_ID", by.y = "PATIENT_ID", all.x = TRUE, all.y = FALSE)
+
+sum(is.na(demo_hep_c_patients$YEARS_EDUCATION))#2883 missing
+
+table(demo_hep_c_patients$Race)
+table(demo_hep_c_patients$Ethnicity)
+table(demo_hep_c_patients$language)
+table(demo_hep_c_patients$Marital_Status)
+sum(!is.na(demo_hep_c_patients$DOD_DS))#408 have died
+table(demo_hep_c_patients$YEARS_EDUCATION)
+```
+
+```{r}
+##########Zip Codes of Hep C patients#############
+
+hep_c_patients_zip_code <- hep_c_patient_encounters[c("Patient_ID", "Encounter_ID", "Pat_Enc_Csn_ID_DID", "Enc_DT_DS", "Zip_Code_DID")]
+dim(hep_c_patients_zip_code)
+hep_c_patients_zip_code_freq <- as.data.frame(table(hep_c_patients_zip_code$Patient_ID))
+colnames(hep_c_patients_zip_code_freq) <- c("Patient_ID", "Count_Zip_Code")
+hep_c_patients_zip_code_freq[order(-hep_c_patients_zip_code_freq$Count_Zip_Code),]
+
+```
+
