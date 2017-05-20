@@ -23,20 +23,22 @@ length(unique(icd_10$icd_dx)) #9837 unique icd codes
 ##Match icd 9 codes per Dr Davis's email
 hep_c_icd_dx <- subset(diagnosis_icd, 
                         icd_dx == "V02.62" | #Carrier or suspected carrier of Hep C (icd9)
-                        icd_dx == "Z2252" | #Carrier or suspected carrier of Hep C (icd10)
+                        icd_dx == "Z22.52" | #Carrier or suspected carrier of Hep C (icd10)
                         icd_dx == "V12.09" | #Hepatitis C, history of (icd9)
                         #icd_dx == "070.41" | #Acute hepatitis C with hepatic coma (icd9)
-                        icd_dx == "070.44" | #Chronic hepatitis C with hepatic coma (icd9)
+                        #icd_dx == "070.44" | #Chronic hepatitis C with hepatic coma (icd9)
                         #icd_dx == "070.51" | #Acute hepatitis C without mention of hepatic coma (icd9)
                         icd_dx == "070.54" | #Chronic hepatitis C without mention of hepatic coma; reat that it can be used as hep c in remission (icd9)
                         #icd_dx == "070.7" | #Unspecified viral hepatitis C (icd9)
                         icd_dx == "070.70" | #Unspecified viral hepatitis C without hepatic coma (icd9)
                         icd_dx == "070.71" | #Unspecified viral hepatitis C with hepatic coma (icd9)
-                        icd_dx == "B182"  | #Chronic viral hepatitis C (icd10)
+                        icd_dx == "B19.20" | #Unspecified viral hepatitis C without hepatic coma (icd10)
                         icd_dx == "B1920" | #Unspecified viral hepatitis C without hepatic coma (icd10)
+                        icd_dx == "B18.2" | #Chronic viral hep C (icd10)
                         #icd_dx == "B1710" | #Acute hepatitis C without hepatic coma (icd10)
-                        icd_dx == "B1921" #Unspecified viral hepatitis C with hepatic coma (icd10)
-                          )
+                        icd_dx == "B19.21" | #Unspecified viral hepatitis C with hepatic coma (icd10)
+                        icd_dx == "B1921"  #Unspecified viral hepatitis C with hepatic coma (icd10)
+)
 
 #Codes below were not included - These are icd 10 codes - there doesn't seem to be specific Hep C codes during pregnancy for icd 9
 #"O98411" (icd10) - Viral hepatitis complicating pregnancy, first trimester
@@ -44,7 +46,7 @@ hep_c_icd_dx <- subset(diagnosis_icd,
 #"O9842" (icd10) - "VIRAL HEPATITIS COMPLICATING CHILDBIRTH"  
 #"O98413" (icd10) - "VIRAL HEPATITIS COMP PREGNANCY THIRD TRIMESTER" 
 
-dim(hep_c_icd_dx)#27937 rows
+dim(hep_c_icd_dx)#26540 rows
 table(hep_c_icd_dx$icd_dx)
 table(hep_c_icd_dx$icd_diagnosis)
 
@@ -54,29 +56,29 @@ hep_c_icd_dx_graph <- barplot(table(hep_c_icd_dx$icd_dx),
                                  ylim = c(0, 20000))
 text(hep_c_icd_dx_graph, table(hep_c_icd_dx$icd_diagnosis), labels = table(hep_c_icd_dx$icd_diagnosis), pos = 3)
 
-length(unique(hep_c_icd_dx$patient_id)) #3768 unique patient id's
+length(unique(hep_c_icd_dx$PATIENT_ID)) #3707 unique patient id's
 
 
 #Create vector with id numbers of unique patients with a Hep C icd code
 #####
-unique_hep_c_ids <- as.data.frame(unique(hep_c_icd_dx$patient_id))
+unique_hep_c_ids <- as.data.frame(unique(hep_c_icd_dx$PATIENT_ID))
 colnames(unique_hep_c_ids) <- "PATIENT_ID"
 unique_hep_c_ids$PATIENT_ID<-str_pad(unique_hep_c_ids$PATIENT_ID, 10, pad = "0")
-nrow(unique_hep_c_ids) #3768
-write.csv(unique_hep_c_ids, "Z:/Hepatitis C Project/unique_hep_c_patient_ids.csv")
+nrow(unique_hep_c_ids) #3707
+write.csv(unique_hep_c_ids, "Z:/unique_hep_c_patient_ids.csv")
 ```
 
 
 ```{r}
 
 #####number of hep c diagnosis codes per unique patient #####
-num_of_hep_c_codes_per_patient <- as.data.frame(aggregate(encounter_id~patient_id, data = hep_c_icd_dx, FUN = length))
-colnames(num_of_hep_c_codes_per_patient) <- c("patient_id", "total_num_of_hep_c_codes")
+num_of_hep_c_codes_per_patient <- as.data.frame(aggregate(ENCOUNTER_ID~PATIENT_ID, data = hep_c_icd_dx, FUN = length))
+colnames(num_of_hep_c_codes_per_patient) <- c("PATIENT_ID", "total_num_of_hep_c_codes")
 
 head(num_of_hep_c_codes_per_patient[order(-num_of_hep_c_codes_per_patient$total_num_of_hep_c_codes),])#sort with most hep_c_codes on top
 
-nrow(subset(num_of_hep_c_codes_per_patient, total_num_of_hep_c_codes == 1)) #1295 unique patients with 1 hep c diagnosis code
-nrow(subset(num_of_hep_c_codes_per_patient, total_num_of_hep_c_codes >= 5)) #1551 unique patients with 5 or greater hep c diagnosis code
+nrow(subset(num_of_hep_c_codes_per_patient, total_num_of_hep_c_codes == 1)) #1288 unique patients with 1 hep c diagnosis code
+nrow(subset(num_of_hep_c_codes_per_patient, total_num_of_hep_c_codes >= 5)) #1492 unique patients with 5 or greater hep c diagnosis code
 ```
 
 ```{r}
@@ -694,7 +696,7 @@ sum(is.na(encounters$Service_Area))
 
 
 
-```{r cars}
+```{r}
 ########CPT File##########
 
 str(cpt)
@@ -705,35 +707,16 @@ dim(cpt)
 length(unique(cpt$patient_id))
 sum(is.na(cpt$patient_id))
 
-#collection of venous blood by venipuncture
-subset(cpt, CPT == "36415") #32340
+##Match CPT codes per Dr Davis's email
+hep_c_cpt <- subset(cpt, 
+                        CPT == "86803" | #Hep C antibody
+                        CPT == "86804" | #Hep C antibody, confirmatory test
+                        CPT == "87520" | #Hep C direct probe technique
+                        CPT == "87521" | #Hep C amplified probe technique
+                        CPT == "87522"  #Hep C quantification
+                      )
 
-#Hep C antibody screening, for individual at high risk and other covered indication
-subset(cpt, CPT == "G0472") #0
-
-#Hepatitis C Anitbody
-subset(cpt, CPT == "86803") #318
-
-#Hepatitis C, confirmatory test (with reflex)
-subset(cpt, CPT == "86804") #2
-
-#Hepatitis C, direct probe technique
-subset(cpt, CPT == "87520") #0
-
-#Hepatitis C, amplified probe
-subset(cpt, CPT == "87521") #0
-
-#Hepatitis C, quantification
-subset(cpt, CPT == "87522") #256
-
-#Hepatitis C virus(HCV) genotype test
-subset(cpt, CPT == "87902") #20
-
-#Hepatitis C, genotype test
-subset(cpt, CPT == "3266F") #88
-
-#Anti-Nuclear Antibodies(ANA)
-subset(cpt, CPT == "86038") #0
+dim(hep_c_cpt)#576 rows
 
 
 ```
