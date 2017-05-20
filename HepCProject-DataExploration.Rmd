@@ -6,47 +6,35 @@ output: word_document
 ---
 
 ```{r}
-#############DIAGNOSIS ICD Table#############
+############# DIAGNOSIS ICD Table #############
 
-library(readr)
-
-
-diagnosis_icd<-read_delim("Z:/RawData/TextFormat/Diagnosis_ICD.txt", "|", escape_double = FALSE, trim_ws = TRUE)
-
-str(diagnosis_icd)#8,536,894 obs. of  7 variables
-head(diagnosis_icd)
 
 #exploring number of unique values, what the unique values are, # of rows with values it and the # of rows with NA's
-length(unique(diagnosis_icd$dx_rank))
-table(diagnosis_icd$dx_rank)
-sum(!is.na(diagnosis_icd$dx_rank))
-sum(is.na(diagnosis_icd$dx_rank))
+icd_9 <- (subset(diagnosis_icd, ICD_TYPE == 9)) #icd 9 codes = 8,016,285 rows 
+icd_10 <- (subset(diagnosis_icd, ICD_TYPE == 10)) #icd 10 codes = 520,609 rows
+length(unique(icd_9$icd_dx)) #10593 unique icd codes
+length(unique(icd_10$icd_dx)) #9837 unique icd codes
 
-
-#Match "070" to icd dx column - 070 is prefix for Viral hepatitis so it includes all types of Hep C and it picks up other unrelated icd codes with "070" within
-hep_c_icd_dx_v1 <- diagnosis_icd[grep("070", diagnosis_icd$icd_dx),] #grep search for matches to "070" within each element of a character vector:
-dim(hep_c_icd_dx_v1)#30,153 rows
-table(hep_c_icd_dx_v1$icd_dx)
-table(hep_c_icd_dx_v1$icd_diagnosis)
-length(unique(hep_c_icd_dx_v1$patient_id)) #4063 unique patient id's
 ```
 
 ```{r}
-##Match icd 9 codes that have "Hepatitis C" in the description
-hep_c_icd_dx_v2 <- subset(diagnosis_icd, 
+#Find Hep C patients from icd diagnosis codes
+
+##Match icd 9 codes per Dr Davis's email
+hep_c_icd_dx <- subset(diagnosis_icd, 
                         icd_dx == "V02.62" | #Carrier or suspected carrier of Hep C (icd9)
                         icd_dx == "Z2252" | #Carrier or suspected carrier of Hep C (icd10)
                         icd_dx == "V12.09" | #Hepatitis C, history of (icd9)
-                        icd_dx == "070.41" | #Acute hepatitis C with hepatic coma (icd9)
+                        #icd_dx == "070.41" | #Acute hepatitis C with hepatic coma (icd9)
                         icd_dx == "070.44" | #Chronic hepatitis C with hepatic coma (icd9)
-                        icd_dx == "070.51" | #Acute hepatitis C without mention of hepatic coma (icd9)
+                        #icd_dx == "070.51" | #Acute hepatitis C without mention of hepatic coma (icd9)
                         icd_dx == "070.54" | #Chronic hepatitis C without mention of hepatic coma; reat that it can be used as hep c in remission (icd9)
-                        icd_dx == "070.7" | #Unspecified viral hepatitis C (icd9)
+                        #icd_dx == "070.7" | #Unspecified viral hepatitis C (icd9)
                         icd_dx == "070.70" | #Unspecified viral hepatitis C without hepatic coma (icd9)
                         icd_dx == "070.71" | #Unspecified viral hepatitis C with hepatic coma (icd9)
                         icd_dx == "B182"  | #Chronic viral hepatitis C (icd10)
                         icd_dx == "B1920" | #Unspecified viral hepatitis C without hepatic coma (icd10)
-                        icd_dx == "B1710" | #Acute hepatitis C without hepatic coma (icd10)
+                        #icd_dx == "B1710" | #Acute hepatitis C without hepatic coma (icd10)
                         icd_dx == "B1921" #Unspecified viral hepatitis C with hepatic coma (icd10)
                           )
 
@@ -56,127 +44,423 @@ hep_c_icd_dx_v2 <- subset(diagnosis_icd,
 #"O9842" (icd10) - "VIRAL HEPATITIS COMPLICATING CHILDBIRTH"  
 #"O98413" (icd10) - "VIRAL HEPATITIS COMP PREGNANCY THIRD TRIMESTER" 
 
-dim(hep_c_icd_dx_v2)#28,199 rows
-table(hep_c_icd_dx_v2$icd_dx)
-table(hep_c_icd_dx_v2$icd_diagnosis)
+dim(hep_c_icd_dx)#27937 rows
+table(hep_c_icd_dx$icd_dx)
+table(hep_c_icd_dx$icd_diagnosis)
 
 #Barplot
-hep_c_icd_dx_v2_graph <- barplot(table(hep_c_icd_dx_v2$icd_dx), 
+hep_c_icd_dx_graph <- barplot(table(hep_c_icd_dx$icd_dx), 
                                  xlab = "ICD Code", ylab = "Frequency", main = "# of Times ICD Code Appears in ICD Table",
                                  ylim = c(0, 20000))
-text(hep_c_icd_dx_v2_graph, table(hep_c_icd_dx_v2$icd_diagnosis), labels = table(hep_c_icd_dx_v2$icd_diagnosis), pos = 3)
+text(hep_c_icd_dx_graph, table(hep_c_icd_dx$icd_diagnosis), labels = table(hep_c_icd_dx$icd_diagnosis), pos = 3)
 
-length(unique(hep_c_icd_dx_v2$patient_id)) #3,787 unique patient id's
+length(unique(hep_c_icd_dx$patient_id)) #3768 unique patient id's
 
-#order by patient_id and then by encounter date
-sorted_hep_c_icd_dx_v2 <- hep_c_icd_dx_v2[with(hep_c_icd_dx_v2, order(patient_id, enc_dt_ds)),]
 
-#number of encounters per patient
-num_of_encounters_per_patient <- as.data.frame(aggregate(encounter_id~patient_id, data = hep_c_icd_dx_v2, FUN = length))
-colnames(num_of_encounters_per_patient) <- c("patient_id", "total_num_of_encounters")
-num_of_encounters_per_patient[order(-num_of_encounters_per_patient$total_num_of_encounters),]#sort with most encounters on top
+#Create vector with id numbers of unique patients with a Hep C icd code
+#####
+unique_hep_c_ids <- as.data.frame(unique(hep_c_icd_dx$patient_id))
+colnames(unique_hep_c_ids) <- "PATIENT_ID"
+unique_hep_c_ids$PATIENT_ID<-str_pad(unique_hep_c_ids$PATIENT_ID, 10, pad = "0")
+nrow(unique_hep_c_ids) #3768
+write.csv(unique_hep_c_ids, "Z:/Hepatitis C Project/unique_hep_c_patient_ids.csv")
+```
 
+
+```{r}
+
+#####number of hep c diagnosis codes per unique patient #####
+num_of_hep_c_codes_per_patient <- as.data.frame(aggregate(encounter_id~patient_id, data = hep_c_icd_dx, FUN = length))
+colnames(num_of_hep_c_codes_per_patient) <- c("patient_id", "total_num_of_hep_c_codes")
+
+head(num_of_hep_c_codes_per_patient[order(-num_of_hep_c_codes_per_patient$total_num_of_hep_c_codes),])#sort with most hep_c_codes on top
+
+nrow(subset(num_of_hep_c_codes_per_patient, total_num_of_hep_c_codes == 1)) #1295 unique patients with 1 hep c diagnosis code
+nrow(subset(num_of_hep_c_codes_per_patient, total_num_of_hep_c_codes >= 5)) #1551 unique patients with 5 or greater hep c diagnosis code
+```
+
+```{r}
+#####Find first hep c diagnosis dates; need to figure out date shifting before we can run this code???  It needs work####
 
 #find earilest hep C icd code using aggregate 
-hep_c_patients_first_encounter_date <- aggregate(enc_dt_ds~patient_id,  data = hep_c_icd_dx_v2, min)
+hep_c_patients_first_hep_c_encounter_date <- aggregate(enc_dt_ds~patient_id,  data = hep_c_icd_dx, min) ####might not be able to use this encounter date!!!!!?????
 
-#merge with original dataset = to get each unique patients first encounter info
-hep_c_patients_first_encounter_date <- merge(hep_c_patients_first_encounter_date, hep_c_icd_dx_v2)
-####????????????format of date is changed??  Dates are showing up as date and time and date seems to be shifted by one day as if it was rounding up before??????????
-hep_c_patients_first_encounter_date[order(hep_c_patients_first_encounter_date$patient_id),]
+#rename patient id and encounter date column
+names(hep_c_patients_first_hep_c_encounter_date)[names(hep_c_patients_first_hep_c_encounter_date) == "enc_dt_ds"] <- "first_encounter_date_with_Hep_C_icd_code"
+names(hep_c_patients_first_hep_c_encounter_date)[names(hep_c_patients_first_hep_c_encounter_date) == "patient_id"] <- "PATIENT_ID"
+
+
 
 sum(hep_c_patients_first_encounter_date$first_encounter_date > "2014-01-01")#1558 patients whose first hep c encounter was after 01-01-2014
 sum(hep_c_patients_first_encounter_date$first_encounter_date > "2015-01-01")#924 patients whose first hep c encounter was after 01-01-2015
 
 
-#Create vector with id numbers of patients with a Hep C icd code
-unique_hep_c_ids <- as.data.frame(unique(hep_c_icd_dx_v2$patient_id))
-colnames(unique_hep_c_ids) <- "PATIENT_ID"
-nrow(unique_hep_c_ids) #3787
-write.csv(unique_hep_c_ids, "Z:/Hepatitis C Project/unique_hep_c_patient_ids.csv")
 ```
-
-```{r}
-#Match "Hepatitis" to icd description
-hep_c_icd_diagnosis_v1 <- diagnosis_icd[grep("HEPATITIS", diagnosis_icd$icd_diagnosis),]#grep search for matches to "Hepatitis within each element of a character vector:
-dim(hep_c_icd_diagnosis_v1)#39432 rows
-table(hep_c_icd_diagnosis_v1$icd_diagnosis)
-length(table(hep_c_icd_diagnosis_v1$icd_diagnosis))
-
-#Barplot
-hep_c_icd_diagnosis_v1_graph <- barplot(table(hep_c_icd_diagnosis_v1$icd_dx), 
-                                 xlab = "ICD Code", ylab = "Frequency", main = "# of Times ICD Code Appears in ICD Table", cex.names = .5, 
-                                 ylim = c(0, 20000))
-#text(hep_c_icd_diagnosis_v1_graph, table(hep_c_icd_diagnosis_v1$icd_dx), labels = table(hep_c_icd_diagnosis_v1$icd_dx), cex = .5, pos = 3)
-
-length(unique(hep_c_icd_diagnosis_v1$patient_id)) #6892 unique patient id's
-```
-
-```{r}
-##Match icd 9 codes that have "Hepatitis C" in the description
-hep_c_icd_diagnosis_v2 <- diagnosis_icd[grep("HEPATITIS C", diagnosis_icd$icd_diagnosis),]  #grep search for matches to "Hepatitis C"" within each element of a character vector:
-dim(hep_c_icd_diagnosis_v2)#27445 rows
-table(hep_c_icd_diagnosis_v2$icd_diagnosis)
-length(table(hep_c_icd_diagnosis_v2$icd_diagnosis))
-length(unique(hep_c_icd_diagnosis_v2$patient_id))#3322 unique patient id's
-
-unique(hep_c_icd_diagnosis_v2$icd_dx)
-unique(hep_c_icd_diagnosis_v2$icd_diagnosis)
-```
+`
 
 
 ```{r}
-##Combine all table for hep C patients only
-hep_c_patient_encounters <- merge(encounters, unique_hep_c_ids, by.x = "Patient_ID", by.y = "PATIENT_ID", all.x = FALSE, all.y = TRUE)
-dim(hep_c_patient_encounters)
+
+#######have to go through this code again - Cindy K. #######
+
+
+##Combine hep c patient ID listing to encounter table to get all encounters for hep c patients
+hep_c_patient_encounters <- encounters[encounters$PATIENT_ID %in% unique_hep_c_ids$PATIENT_ID,]
+dim(hep_c_patient_encounters)# 463,271rows
+
+#order by increasing patient ID and decreaseing encounter date
+hep_c_patient_encounters <- hep_c_patient_encounters[order(hep_c_patient_encounters$Patient_ID, hep_c_patient_encounters$Enc_DT_DS),]
+
+
+
+hep_c_patient_encounters <- merge(hep_c_patients_first_hep_c_encounter_date, hep_c_patient_encounters, by ="PATIENT_ID")
+
 #order by increasing patient ID and decreaseing encounter date
 hep_c_patient_encounters <- hep_c_patient_encounters[order(hep_c_patient_encounters$Patient_ID, hep_c_patient_encounters$Enc_DT_DS),]
 
 ##Merge encounter data with diagnosis icd dataset
-hep_c_patient_merge_1 <- merge(hep_c_patient_encounters, diagnosis_icd, by.x = "Patient_ID", by.y = "patient_id", all.x = TRUE, all.y = FALSE)
+hep_c_patient_merge_1 <- merge(hep_c_patient_encounters, diagnosis_icd, by = "PATIENT_ID", all.x = TRUE, all.y = FALSE)
 dim(hep_c_patient_merge_1)
 
 ##Merge encounter data with cpt dataset
-hep_c_patient_merge_2 <- merge(hep_c_patient_merge_1, cpt, by.x = "Patient_ID", all.x = TRUE, all.y = FALSE)
+hep_c_patient_merge_2 <- merge(hep_c_patient_merge_1, cpt, by = "PATIENT_ID", all.x = TRUE, all.y = FALSE)
 
 ##Merge encounter data with med at admission
-hep_c_patient_merge_3 <- merge(hep_c_patient_merge_2, med_rec_adm, by.x = "Patient_ID",all.x = TRUE, all.y = FALSE)
+hep_c_patient_merge_3 <- merge(hep_c_patient_merge_2, med_rec_adm, by = "PATIENT_ID", all.x = TRUE, all.y = FALSE)
 
 ##Merge encounter data with meds at discharge
-hep_c_patient_merge_4 <- merge(hep_c_patient_merge_3, med_rec_dc, by.x = "Patient_ID", all.x = TRUE, all.y = FALSE)
+hep_c_patient_merge_4 <- merge(hep_c_patient_merge_3, med_rec_dc, by = "PATIENT_ID", all.x = TRUE, all.y = FALSE)
 
 ##Merge encounter data with med during inpatient stay
-hep_c_patient_merge_5 <- merge(hep_c_patient_merge_4, meds_inpt, by.x = "Patient_ID", all.x = TRUE, all.y = FALSE)
+hep_c_patient_merge_5 <- merge(hep_c_patient_merge_4, meds_inpt, by = "PATIENT_ID", all.x = TRUE, all.y = FALSE)
 
 ##Merge encounter data with med during outpatient visit
-hep_c_patient_merge_6 <- merge(hep_c_patient_merge_5, meds_outpt, by.x = "Patient_ID", all.x = TRUE, all.y = FALSE)
+hep_c_patient_merge_6 <- merge(hep_c_patient_merge_5, meds_outpt, by = "PATIENT_ID", all.x = TRUE, all.y = FALSE)
 
 ##Merge encounter data with procedure icd codes
-hep_c_patient_merge_7 <- merge(hep_c_patient_merge_6, procedure_icd, by.x = "Patient_ID", all.x = TRUE, all.y = FALSE)
+hep_c_patient_merge_7 <- merge(hep_c_patient_merge_6, procedure_icd, by = "PATIENT_ID", all.x = TRUE, all.y = FALSE)
 
 ##Merge encounter data with social data from that encounter
-hep_c_patient_encounters_all <- merge(hep_c_patient_merge_7, social_hx, by = "Patient_ID", all.x = TRUE, all.y = FALSE)
-
-
-
-```
-```{r}
-#rename encounter date and id column
-names(hep_c_patients_first_encounter_date)[names(hep_c_patients_first_encounter_date) == "enc_dt_ds"] <- "first_encounter_date"
-
-names(hep_c_patients_first_encounter_date)[names(hep_c_patients_first_encounter_date) == "encounter_id"] <- "first_encounter_id"
+hep_c_patient_encounters_all <- merge(hep_c_patient_merge_7, social_hx, by = "PATIENT_ID", all.x = TRUE, all.y = FALSE)
 
 #Merge first encounter date with hep c patient data to add first hep c encounter date and id  
-hep_c_patient_encounters_all <- merge(hep_c_patient_encounters, hep_c_patients_first_encounter_date [, c("patient_id", "first_encounter_date", "first_encounter_id")], by.x = "Patient_ID", by.y = "patient_id", all.x = TRUE, all.y = FALSE)
+hep_c_patient_encounters_all <- merge(hep_c_patient_encounters, hep_c_patients_first_encounter_date [, c("patient_id", "first_encounter_date", "first_encounter_id")], by = "PATIENT_ID", all.x = TRUE, all.y = FALSE)
 
 #creating new column to determine whether encounter is before or after first hep c encounter
 hep_c_patient_encounters_all$before_after_first_encounter <- ifelse(hep_c_patient_encounters_all$Enc_DT_DS >= hep_c_patient_encounters_all$first_encounter_date, "after", "before")
 
 #can filter on before and after
+
+```
+
+```{r}
+###################Unique Patient ID Dataset - Analyzing what we have on patients############
+
+patient_ID_encounters <- as.data.frame(table(encounters$PATIENT_ID))
+colnames(patient_ID_encounters) <- c("PATIENT_ID", "Count_Encounters")
+
+patient_ID_diagnosis_icd <- as.data.frame(table(diagnosis_icd$PATIENT_ID))
+colnames(patient_ID_diagnosis_icd) <- c("PATIENT_ID", "Count_Diagnosis_ICD")
+
+merge_1 <- merge(patient_ID_encounters, patient_ID_diagnosis_icd, by = "PATIENT_ID", all.x = TRUE, all.y = TRUE)
+sum(is.na(merge_1))
+
+patient_ID_cpt <- as.data.frame(table(cpt$PATIENT_ID))
+colnames(patient_ID_cpt) <- c("PATIENT_ID", "Count_CPT")
+
+merge_2 <- merge(merge_1, patient_ID_cpt, by = "PATIENT_ID", all.x = TRUE, all.y = TRUE)
+
+patient_ID_med_rec_adm <- as.data.frame(table(med_rec_adm$PATIENT_ID))
+colnames(patient_ID_med_rec_adm) <- c("PATIENT_ID", "Count_Med_Rec_ADM")
+
+merge_3 <- merge(merge_2, patient_ID_med_rec_adm, by = "PATIENT_ID", all.x = TRUE, all.y = TRUE)
+
+patient_ID_med_rec_dc <- as.data.frame(table(med_rec_dc$PATIENT_ID))
+colnames(patient_ID_med_rec_dc) <- c("PATIENT_ID", "Count_Med_Rec_DC")
+
+merge_4 <- merge(merge_3, patient_ID_med_rec_dc, by = "PATIENT_ID", all.x = TRUE, all.y = TRUE)
+
+patient_ID_meds_inpt <- as.data.frame(table(meds_inpt$PATIENT_ID))
+colnames(patient_ID_meds_inpt) <- c("PATIENT_ID", "Count_Meds_Inpt")
+
+merge_5 <- merge(merge_4, patient_ID_meds_inpt, by = "PATIENT_ID", all.x = TRUE, all.y = TRUE)
+
+patient_ID_meds_outpt <- as.data.frame(table(meds_outpt$PATIENT_ID))
+colnames(patient_ID_meds_outpt) <- c("PATIENT_ID", "Count_Meds_Outpt")
+
+merge_6 <- merge(merge_5, patient_ID_meds_outpt, by = "PATIENT_ID", all.x = TRUE, all.y = TRUE)
+
+patient_ID_procedure_icd <- as.data.frame(table(procedure_icd$patient_id))
+colnames(patient_ID_procedure_icd) <- c("PATIENT_ID", "Count_Procedure_ICD")
+
+merge_7 <- merge(merge_6, patient_ID_procedure_icd, by = "PATIENT_ID", all.x = TRUE, all.y = TRUE)
+
+patient_ID_social <- as.data.frame(table(social_hx$Patient_ID))
+colnames(patient_ID_social) <- c("PATIENT_ID", "Count_Social")
+
+merge_8 <- merge(merge_7, patient_ID_social, by = "PATIENT_ID", all.x = TRUE, all.y = TRUE)
+
+patient_ID_demo <- as.data.frame(table(demo$PATIENT_ID))
+colnames(patient_ID_demo) <- c("PATIENT_ID", "Count_Demo")
+
+merge_9 <- merge(merge_8, patient_ID_demo, by = "PATIENT_ID", all.x = TRUE, all.y = TRUE)
+
+patient_ID_labs <- as.data.frame(table(labs$PATIENT_ID))
+colnames(patient_ID_labs) <- c("PATIENT_ID", "Count_labs")
+
+merge_10 <- merge(merge_9, patient_ID_labs, by = "PATIENT_ID", all.x = TRUE, all.y = TRUE)
+
+write.csv(merge_10, "Z:/Hepatitis C Project/patient_ID_freq.csv")
+
+#Filter out patients with a Hep C icd diagnosis
+#import hep c patient ID listing
+unique_hep_c_patient_ids<-read.csv("Z:/Hepatitis C Project/unique_hep_c_patient_ids.csv", header = TRUE)#Cindy's data path
+str(unique_hep_c_patient_ids)
+
+#filter merge_10 so only hep C patients are shown
+unique_hep_c_patients_freq <- subset(merge_10, PATIENT_ID %in% unique_hep_c_patient_ids$PATIENT_ID) 
+
+#Export to csv
+write.csv(unique_hep_c_patients_freq, "Z:/Hepatitis C Project/unique_hep_c_patients_freq.csv")
+```
+
+```{r}
+###################Unique Encounter ID Dataset - Analyzing what we have on encoutners############
+encounter_ID_encounters <- as.data.frame(table(encounters$ENCOUNTER_ID))
+colnames(encounter_ID_encounters) <- c("ENCOUNTER_ID", "Count_Encounters")
+
+encounter_ID_diagnosis_icd <- as.data.frame(table(diagnosis_icd$ENCOUNTER_ID))
+colnames(encounter_ID_diagnosis_icd) <- c("ENCOUNTER_ID", "Count_Diagnosis_ICD")
+
+merge_1.2 <- merge(encounter_ID_encounters, encounter_ID_diagnosis_icd, by = "ENCOUNTER_ID", all.x = TRUE, all.y = TRUE)
+
+encounter_ID_cpt <- as.data.frame(table(cpt$ENCOUNTER_ID))
+colnames(encounter_ID_cpt) <- c("ENCOUNTER_ID", "Count_CPT")
+
+merge_2.2 <- merge(merge_1.2, encounter_ID_cpt, by = "ENCOUNTER_ID", all.x = TRUE, all.y = TRUE)
+
+encounter_ID_med_rec_adm <- as.data.frame(table(med_rec_adm$ENCOUNTER_ID))
+colnames(encounter_ID_med_rec_adm) <- c("ENCOUNTER_ID", "Count_Med_Rec_ADM")
+
+merge_3.2 <- merge(merge_2.2, encounter_ID_med_rec_adm, by = "ENCOUNTER_ID", all.x = TRUE, all.y = TRUE)
+
+encounter_ID_med_rec_dc <- as.data.frame(table(med_rec_dc$ENCOUNTER_ID))
+colnames(encounter_ID_med_rec_dc) <- c("ENCOUNTER_ID", "Count_Med_Rec_DC")
+
+merge_4.2 <- merge(merge_3.2, encounter_ID_med_rec_dc, by = "ENCOUNTER_ID", all.x = TRUE, all.y = TRUE)
+
+encounter_ID_meds_inpt <- as.data.frame(table(meds_inpt$ENCOUNTER_ID))
+colnames(encounter_ID_meds_inpt) <- c("ENCOUNTER_ID", "Count_Meds_Inpt")
+
+merge_5.2 <- merge(merge_4.2, encounter_ID_meds_inpt, by = "ENCOUNTER_ID", all.x = TRUE, all.y = TRUE)
+
+encounter_ID_meds_outpt <- as.data.frame(table(meds_outpt$ENCOUNTER_ID))
+colnames(encounter_ID_meds_outpt) <- c("ENCOUNTER_ID", "Count_Meds_Outpt")
+
+merge_6.2 <- merge(merge_5.2, encounter_ID_meds_outpt, by = "ENCOUNTER_ID", all.x = TRUE, all.y = TRUE)
+
+encounter_ID_procedure_icd <- as.data.frame(table(procedure_icd$ENCOUNTER_ID))
+colnames(encounter_ID_procedure_icd) <- c("ENCOUNTER_ID", "Count_Procedure_ICD")
+
+merge_7.2 <- merge(merge_6.2, encounter_ID_procedure_icd, by = "ENCOUNTER_ID", all.x = TRUE, all.y = TRUE)
+
+encounter_ID_social <- as.data.frame(table(social_hx$ENCOUNTER_ID))
+colnames(encounter_ID_social) <- c("ENCOUNTER_ID", "Count_Social")
+
+merge_8.2 <- merge(merge_7.2, encounter_ID_social, by = "ENCOUNTER_ID", all.x = TRUE, all.y = TRUE)
+
+#encounter_ID_labs <- as.data.frame(table(labs$ENCOUNTER_ID))
+#colnames(encounter_ID_labs) <- c("ENCOUNTER_ID", "Count_labs")
+#merge_9.2 <- merge(merge_8.2, encounter_ID_demo, by = "ENCOUNTER_ID", all.x = TRUE, all.y = TRUE)
+
+write.csv(merge_8.2, "Z:/Hepatitis C Project/encounter_ID_freq.csv")
+```
+
+
+
+```{r}
+####Exploring Encounter Table####
+
+### Look at encounter type and the percent of NA's in each type
+sum(is.na(encounters$ENCOUNTER_ID))
+
+sum(is.na(encounterS$Enc_DT_DS))
+
+#___ NA in encounter ID out of ___ ROWS
+
+unique(encounters$Enc_EIO)
+
+#looking at observations by encounter EIO
+outpatient_encounters <- encounters[(encountes$Enc_EIO %in% c("O", "I, O", "E, O", "E, I, O")),]
+sum(is.na(outpatient_encounters$ENCOUNTER_ID))
+
+emergency_encounters <- encounters[(encounters$Enc_EIO %in% c("E", "E, I", "E, O", "E, I, O")),]
+sum(is.na(emergency_encounters$ENCOUNTER_ID))
+
+inpatient_encounters <- encounters[(encounters$Enc_EIO %in% c("I, O", "I", "E, I", "E, I, O")),]
+sum(is.na(inpatient_encounters$ENCOUNTER_ID))
+
+#looking at obersations where the appointment type is = appointment and there is a NA for encounter ID
+
+encounters[encounters$Encounter_Type == "Appointment" & is.na(encounters$ENCOUNTER_ID),]
+
+#vector of unique types of encounter type
+encounter_type <- unique(encounters$Encounter_Type)
+
+#finding the total number of observations for each encounter type
+encounter_type_freq <- sapply(encounter_type, function(x)
+    sum(nrow(encounters[encounters$Encounter_Type == x,])))
+
+##finding the total number of observations with NA for encounter ID for each type of encounter type
+num_of_NA_by_encounter_type <- sapply(encounter_type, function(x)
+    sum(nrow(encounters[encounters$Encounter_Type == x & 
+                                            is.na(encounters$ENCOUNTER_ID) ,])))
+
+#caculating the percent of NA's for each encounter type
+Percent_of_NA <- round((num_of_NA_by_encounter_type / encounter_type_freq), 2)
+
+#combining the 3 previous objects into a dataframe
+encounter_type_and_ID_df <- as.data.frame(cbind(encounter_type_freq, num_of_NA_by_encounter_type, Percent_of_NA ))
+
+encounter_type_and_ID_df[order(-encounter_type_and_ID_df$encounter_type_freq),]
+
+write.csv(encounter_type_and_ID_df, "Z:/Hepatitis C Project/Cindy's Folder/encounter_type_and_ID_NA_freq_df.csv")
+```
+
+```{r}
+############Examaining data shifting###########
+
+#reduce to date columns only on Encounter table and remove rows without an Encounter ID
+names(encounters)
+encounter_dates <- encounters [,c("ENCOUNTER_ID", "Enc_DT_DS", "Appt_DTTM_DS", "Hsp_Adm_DTTM_DS")]
+encounter_dates <- encounter_dates[!is.na(encounter_dates$ENCOUNTER_ID),]
+dim(encounter_dates)
+
+
+#Reduce ICD Diagnosis table to encounter id and date field only
+#merge with encounter table
+#Evalute dates
+diagnosis_icd_dates <- diagnosis_icd [,c("ENCOUNTER_ID", "enc_dt_ds")]
+sum(is.na(diagnosis_icd_dates$ENCOUNTER_ID))
+
+encounter_icd_diagnosis_date_merge <- merge(encounter_dates, diagnosis_icd_dates, by = "ENCOUNTER_ID")
+dim(encounter_icd_diagnosis_date_merge)
+
+encounter_icd_diagnosis_date_merge$date_evaluation <- encounter_icd_diagnosis_date_merge$enc_dt_ds == encounter_icd_diagnosis_date_merge$Enc_DT_DS
+
+encounter_icd_diagnosis_date_merge$date_difference <- difftime(encounter_icd_diagnosis_date_merge$enc_dt_ds, encounter_icd_diagnosis_date_merge$Enc_DT_DS, units = "days")
+
+mean(encounter_icd_diagnosis_date_merge$date_difference, rm.na = TRUE)
+icd_diagnosis_false <- subset(encounter_icd_diagnosis_date_merge, date_evaluation == "FALSE")
+mean(icd_diagnosis_false$date_difference, rm.na = TRUE)
+#Match Rate
+nrow(subset(encounter_icd_diagnosis_date_merge, date_evaluation == "TRUE")) / nrow(encounter_icd_diagnosis_date_merge)
+
+
+
+###CPT
+#Reduce cpt table to encounter id and date field only
+#merge with encounter table
+#Evalute dates
+cpt_dates <- cpt [,c("ENCOUNTER_ID", "enc_dt_ds")]
+
+encounter_cpt_date_merge <- merge(encounter_dates, cpt_dates, by = "ENCOUNTER_ID")
+dim(encounter_cpt_date_merge)
+
+encounter_cpt_date_merge$date_evaluation <- encounter_cpt_date_merge$enc_dt_ds == encounter_cpt_date_merge$Enc_DT_DS
+
+encounter_cpt_date_merge$date_difference <- difftime(encounter_cpt_date_merge$enc_dt_ds, encounter_cpt_date_merge$Enc_DT_DS, units = "days")
+
+mean(encounter_cpt_date_merge$date_difference, rm.na = TRUE)
+subset(encounter_cpt_date_merge, date_evaluation == "FALSE")
+#Match Rate
+nrow(subset(encounter_cpt_date_merge, date_evaluation == "TRUE")) / nrow(encounter_cpt_date_merge)
+
+
+
+###Meds Outpatient
+#Reduce meds outpatient table to encounter id and date field only
+#merge with encounter table
+#Evalute dates
+meds_outpt_dates <- meds_outpt [,c("ENCOUNTER_ID", "Enc_DT_DS", "Order_DT_DS")]
+
+encounter_meds_outpt_date_merge <- merge(encounter_dates, meds_outpt_dates, by = "ENCOUNTER_ID")
+dim(encounter_meds_outpt_date_merge)
+
+encounter_meds_outpt_date_merge$date_evaluation <- encounter_meds_outpt_date_merge$Enc_DT_DS.x == encounter_meds_outpt_date_merge$Enc_DT_DS.y
+
+encounter_meds_outpt_date_merge$encounter_date_difference <- difftime(encounter_meds_outpt_date_merge$Enc_DT_DS.x, encounter_meds_outpt_date_merge$Enc_DT_DS.y, units = "days")
+
+encounter_meds_outpt_date_merge$order_date_difference <- difftime(encounter_meds_outpt_date_merge$enc_dt_ds, encounter_meds_outpt_date_merge$Order_DT_DS, units = "days")
+
+mean(encounter_meds_outpt_date_merge$encounter_date_difference, rm.na = TRUE)
+subset(encounter_meds_outpt_date_merge, date_evaluation == "FALSE")
+#Match Rate
+nrow(subset(encounter_meds_outpt_date_merge, date_evaluation == "TRUE")) / nrow(encounter_meds_outpt_date_merge)
+
+
+###Meds Inpatient
+#Reduce meds inpatient table to encounter id and date field only
+#merge with encounter table
+#Evalute dates
+meds_inpt_dates <- meds_inpt [,c("ENCOUNTER_ID", "HSP_ADM_DTTM_DS", "Order_DT_DS")]
+
+encounter_meds_inpt_date_merge <- merge(encounter_dates, meds_inpt_dates, by = "ENCOUNTER_ID")
+
+encounter_meds_inpt_date_merge$date_evaluation <- encounter_meds_inpt_date_merge$enc_dt_ds == encounter_meds_inpt_date_merge$HSP_ADM_DTTM_DS
+
+encounter_meds_inpt_date_merge$encounter_date_difference <- difftime(encounter_meds_inpt_date_merge$Enc_DT_DS, encounter_meds_inpt_date_merge$HSP_ADM_DTTM_DS, units = "days")
+encounter_meds_inpt_date_merge$admit_date_difference <- difftime(encounter_meds_inpt_date_merge$Hsp_Adm_DTTM_DS, encounter_meds_inpt_date_merge$HSP_ADM_DTTM_DS, units = "days")
+
+mean(encounter_meds_inpt_date_merge$admit_date_difference, rm.na = TRUE)
+subset(encounter_meds_inpt_date_merge, date_evaluation == "FALSE")
+
+
+
+#Procedure ICD
+#Reduce procedure icd table to encounter id and date field only
+#merge with encounter table
+#Evalute dates
+procedure_icd_dates <- procedure_icd [,c("ENCOUNTER_ID", "enc_dt_ds")]
+encounter_procedure_icd_date_merge <- merge(encounter_dates, procedure_icd_dates, by.x = "ENCOUNTER_ID", by.y = "encounter_id")
+dim(encounter_procedure_icd_date_merge)
+
+encounter_procedure_icd_date_merge$date_evaluation <- encounter_procedure_icd_date_merge$Enc_DT_DS == encounter_procedure_icd_date_merge$Enc_DT_DS
+
+encounter_procedure_icd_date_merge$date_difference <- difftime(encounter_procedure_icd_date_merge$enc_dt_ds, encounter_procedure_icd_date_merge$Enc_DT_DS, units = "days")
+
+mean(encounter_procedure_icd_date_merge$date_difference, rm.na = TRUE)
+subset(encounter_procedure_icd_date_merge, date_evaluation == "FALSE")
+nrow(subset(encounter_procedure_icd_date_merge, date_evaluation == "TRUE")) / nrow(encounter_procedure_icd_date_merge)
+
+
+
+#Social
+#Reduce social table to encounter id and date field only
+#merge with encounter table
+#Evalute dates
+social_hx_dates <- social_hx [,c("ENCOUNTER_ID", "Enc_DT_DS")]
+colnames(social_hx_dates)[which(names(social_hx_dates ) == "Enc_DT_DS")] <- "Social_Enc_DT_DS"
+
+encounter_social_hx_date_merge <- merge(encounter_dates, social_hx_dates, by="ENCOUNTER_ID")
+dim(encounter_social_hx_date_merge)
+
+
+encounter_social_hx_date_merge$date_evaluation <- encounter_social_hx_date_merge$Enc_DT_DS.x == encounter_social_hx_date_merge$Enc_DT_DS.y
+
+encounter_social_hx_date_merge$date_difference <- difftime(encounter_social_hx_date_merge$Enc_DT_DS.x, encounter_social_hx_date_merge$Enc_DT_DS.y, units = "days")
+
+mean(encounter_social_hx_date_merge$date_difference, rm.na = TRUE)
+social_hx_false <- subset(encounter_social_hx_date_merge, date_evaluation == "FALSE")
+mean(social_hx_false$date_difference)
+#Match Rate
+nrow(subset(encounter_social_hx_date_merge, date_evaluation == "TRUE")) / nrow(encounter_social_hx_date_merge)
+
 ```
 
 ```{r}
 ################Demo data for Hep C patients only##############
+
 demo_hep_c_patients <- subset(demo, PATIENT_ID %in% unique_hep_c_patient_ids$PATIENT_ID) #3785 rows
 
 #remove duplicated rows
@@ -190,7 +474,7 @@ demo_hep_c_patients[duplicated(demo_hep_c_patients$PATIENT_ID),]#0 ids
 demo_freq <- as.data.frame(table(demo_hep_c_patients$PATIENT_ID))#3785 unique id's
 
 
-demo_hep_c_patients <- merge(demo_hep_c_patients, education, by.x = "PATIENT_ID", by.y = "PATIENT_ID", all.x = TRUE, all.y = FALSE)
+demo_hep_c_patients <- merge(demo_hep_c_patients, education, by = "PATIENT_ID", all.x = TRUE, all.y = FALSE)
 
 sum(is.na(demo_hep_c_patients$YEARS_EDUCATION))#2883 missing
 
@@ -207,6 +491,8 @@ table(demo_hep_c_patients$YEARS_EDUCATION)
 
 hep_c_patients_zip_code <- hep_c_patient_encounters[c("Patient_ID", "Encounter_ID", "Pat_Enc_Csn_ID_DID", "Enc_DT_DS", "Zip_Code_DID")]
 dim(hep_c_patients_zip_code)
+
+
 hep_c_patients_zip_code_freq <- as.data.frame(table(hep_c_patients_zip_code$Patient_ID))
 colnames(hep_c_patients_zip_code_freq) <- c("Patient_ID", "Count_Zip_Code")
 hep_c_patients_zip_code_freq[order(-hep_c_patients_zip_code_freq$Count_Zip_Code),]
@@ -1341,4 +1627,37 @@ sum(is.na(demo$Marital_Status))
 demo$DOD_DS
 sum(is.na(demo$DOD_DS))
 
+```
 
+
+
+```{r}
+#######Old Code ######
+
+#Match "Hepatitis" to icd description
+hep_c_icd_diagnosis_v1 <- diagnosis_icd[grep("HEPATITIS", diagnosis_icd$icd_diagnosis),]#grep search for matches to "Hepatitis within each element of a character vector:
+dim(hep_c_icd_diagnosis_v1)#39432 rows
+table(hep_c_icd_diagnosis_v1$icd_diagnosis)
+length(table(hep_c_icd_diagnosis_v1$icd_diagnosis))
+
+#Barplot
+hep_c_icd_diagnosis_v1_graph <- barplot(table(hep_c_icd_diagnosis_v1$icd_dx), 
+                                 xlab = "ICD Code", ylab = "Frequency", main = "# of Times ICD Code Appears in ICD Table", cex.names = .5, 
+                                 ylim = c(0, 20000))
+#text(hep_c_icd_diagnosis_v1_graph, table(hep_c_icd_diagnosis_v1$icd_dx), labels = table(hep_c_icd_diagnosis_v1$icd_dx), cex = .5, pos = 3)
+
+length(unique(hep_c_icd_diagnosis_v1$patient_id)) #6892 unique patient id's
+```
+
+
+```{r}
+##Match icd 9 codes that have "Hepatitis C" in the description
+hep_c_icd_diagnosis_v2 <- diagnosis_icd[grep("HEPATITIS C", diagnosis_icd$icd_diagnosis),]  #grep search for matches to "Hepatitis C"" within each element of a character vector:
+dim(hep_c_icd_diagnosis_v2)#27445 rows
+table(hep_c_icd_diagnosis_v2$icd_diagnosis)
+length(table(hep_c_icd_diagnosis_v2$icd_diagnosis))
+length(unique(hep_c_icd_diagnosis_v2$patient_id))#3322 unique patient id's
+
+unique(hep_c_icd_diagnosis_v2$icd_dx)
+unique(hep_c_icd_diagnosis_v2$icd_diagnosis)
+```
