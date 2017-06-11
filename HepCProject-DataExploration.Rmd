@@ -193,12 +193,12 @@ colnames(patient_ID_meds_outpt) <- c("PATIENT_ID", "Count_Meds_Outpt")
 
 merge_6 <- merge(merge_5, patient_ID_meds_outpt, by = "PATIENT_ID", all.x = TRUE, all.y = TRUE)
 
-patient_ID_procedure_icd <- as.data.frame(table(procedure_icd$patient_id))
+patient_ID_procedure_icd <- as.data.frame(table(procedure_icd$PATIENT_ID))
 colnames(patient_ID_procedure_icd) <- c("PATIENT_ID", "Count_Procedure_ICD")
 
 merge_7 <- merge(merge_6, patient_ID_procedure_icd, by = "PATIENT_ID", all.x = TRUE, all.y = TRUE)
 
-patient_ID_social <- as.data.frame(table(social_hx$Patient_ID))
+patient_ID_social <- as.data.frame(table(social_hx$PATIENT_ID))
 colnames(patient_ID_social) <- c("PATIENT_ID", "Count_Social")
 
 merge_8 <- merge(merge_7, patient_ID_social, by = "PATIENT_ID", all.x = TRUE, all.y = TRUE)
