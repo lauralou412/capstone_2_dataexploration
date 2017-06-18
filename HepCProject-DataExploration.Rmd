@@ -112,35 +112,62 @@ length(unique(icd_10$icd_dx)) #9837 unique icd codes
 
 
 ####Number of 
-#Hep C Patients - Number of diagnosis_icd codes and Average number of diagnosis_icd codes per patient
+#Hep C Patients - Number of obervations in diagnosis_icd table and Average number of obervations in diagnosis_icd table
 hep_c_patient_diagnosis_icd <- diagnosis_icd[diagnosis_icd$PATIENT_ID %in% hep_c_patients_ids_first_hep_c_encounter_date$PATIENT_ID,]
 nrow(hep_c_patient_diagnosis_icd)
 nrow(hep_c_patient_diagnosis_icd) / nrow(diagnosis_icd)
 nrow(hep_c_patient_diagnosis_icd)/length(unique(hep_c_patient_diagnosis_icd$PATIENT_ID))
+length(unique(hep_c_patient_diagnosis_icd$icd_dx))
+num_of_icd_code_by_hep_c_pt <- as.data.frame(table(hep_c_patient_diagnosis_icd$PATIENT_ID))
+
+#Number of unique diagnosis_icd codes for Hep C patients
+unique_icd_codes_per_pt <- hep_c_patient_diagnosis_icd[!duplicated(hep_c_patient_diagnosis_icd[,c("PATIENT_ID", "icd_dx")]),]
+head(unique_icd_codes_per_pt)
+num_of_unique_icd_code_by_hep_c_pt <- as.data.frame(table(unique_icd_codes_per_pt$PATIENT_ID))
+mean(num_of_unique_icd_code_by_hep_c_pt$Freq, na.rm = TRUE)
 
 ##Frequency of ICD Diagnosis codes
 #all records
 hep_c_icd_code_freq<- (as.data.frame(table(hep_c_patient_diagnosis_icd$icd_diagnosis)))
-head(hep_c_icd_code_freq[order(-hep_c_icd_code_freq$Freq),], n=10)
+head(hep_c_icd_code_freq[order(-hep_c_icd_code_freq$Freq),], n=15)
 
-#unduplicated
-unique_hep_c_patient_diagnosis_icd <-hep_c_patient_diagnosis_icd[!duplicated(hep_c_patient_diagnosis_icd),]
-hep_c_icd_code_freq<- (as.data.frame(table(hep_c_patient_diagnosis_icd$icd_diagnosis)))
-head(hep_c_icd_code_freq[order(-hep_c_icd_code_freq$Freq),], n=10)
+#unduplicated- frequency of unique diagnosis codes
+hep_c_unqiue_icd_code_freq<- as.data.frame(table(unique_icd_codes_per_pt$icd_diagnosis))
+head(hep_c_unqiue_icd_code_freq)
+head(hep_c_unqiue_icd_code_freq[order(-hep_c_unqiue_icd_code_freq$Freq),], n=10)
 
 
-#Non Hep C Patients - Number of diagnosis_icd and Average number of diagnosis_icd per patient
+hep_c_n_size <- length(unique(hep_c_patient_diagnosis_icd$PATIENT_ID))
+
+hep_c_unqiue_icd_code_freq$Percent <- hep_c_unqiue_icd_code_freq$Freq / hep_c_n_size
+
+#Non Hep C Patients - Number of obervations in diagnosis_icd table and Average number of obervations in diagnosis_icd table
 non_hep_c_patient_diagnosis_icd <- diagnosis_icd[!diagnosis_icd$PATIENT_ID %in% hep_c_patients_ids_first_hep_c_encounter_date$PATIENT_ID,]
 nrow(non_hep_c_patient_diagnosis_icd)
 nrow(non_hep_c_patient_diagnosis_icd) / nrow(diagnosis_icd)
 nrow(non_hep_c_patient_diagnosis_icd)/length(unique(non_hep_c_patient_diagnosis_icd$PATIENT_ID))
+length(unique(non_hep_c_patient_diagnosis_icd$icd_dx))
+num_of_icd_code_by_non_hep_c_pt <- as.data.frame(table(non_hep_c_patient_diagnosis_icd$PATIENT_ID))
+
+#Number of unique diagnosis_icd codes for non Hep C patients
+unique_icd_codes_per_non_hep_c_pt <- non_hep_c_patient_diagnosis_icd[!duplicated(non_hep_c_patient_diagnosis_icd[,c("PATIENT_ID", "icd_dx")]),]
+head(unique_icd_codes_per_non_hep_c_pt)
+num_of_unique_icd_code_by_hep_c_pt <- as.data.frame(table(unique_icd_codes_per_non_hep_c_pt$PATIENT_ID))
+mean(num_of_unique_icd_code_by_hep_c_pt$Freq, na.rm = TRUE)
 
 ##Frequency of ICD Diagnosis codes
 #all records
 non_hep_c_icd_code_freq<- (as.data.frame(table(non_hep_c_patient_diagnosis_icd$icd_diagnosis)))
 head(non_hep_c_icd_code_freq[order(-non_hep_c_icd_code_freq$Freq),], n=10)
 
+#unduplicated
+non_hep_c_unqiue_icd_code_freq<- as.data.frame(table(unique_icd_codes_per_non_hep_c_pt$icd_diagnosis))
+head(non_hep_c_unqiue_icd_code_freq)
+head(non_hep_c_unqiue_icd_code_freq[order(-non_hep_c_unqiue_icd_code_freq$Freq),], n=25)
 
+non_hep_c_n_size <- length(unique(non_hep_c_patient_diagnosis_icd$PATIENT_ID))
+
+non_hep_c_unqiue_icd_code_freq$Percent <- non_hep_c_unqiue_icd_code_freq$Freq / non_hep_c_n_size
 
 
 #####number of hep c diagnosis codes per unique patient #####
@@ -212,6 +239,8 @@ patient_ID_labs <- as.data.frame(table(labs$PATIENT_ID))
 colnames(patient_ID_labs) <- c("PATIENT_ID", "Count_labs")
 
 merge_10 <- merge(merge_9, patient_ID_labs, by = "PATIENT_ID", all.x = TRUE, all.y = TRUE)
+
+sum(!is.na(merge_10$Count_Social))
 
 write.csv(merge_10, "Z:/Hepatitis C Project/patient_ID_freq.csv")
 
@@ -623,30 +652,84 @@ sapply(demo, function(x) sum(is.na(x)))
 demo$NumMissing = rowSums(is.na(demo))
 
 ################Demo data for Hep C patients only##############
+str(demo)
+hep_c_patients_demo <- demo[demo$PATIENT_ID %in% hep_c_patients_ids_first_hep_c_encounter_date$PATIENT_ID,]
+dim(hep_c_patients_demo)
 
-demo_hep_c_patients <- subset(demo, PATIENT_ID %in% hep_c_patients_ids_first_hep_c_encounter_date$PATIENT_ID) #3785 rows
+#Combining demo table and education table
+demo_hep_c_patients <- merge(hep_c_patients_demo, education, by = "PATIENT_ID", all.x = TRUE, all.y = FALSE)
+str(demo_hep_c_patients)
+sum(!is.na(demo_hep_c_patients$YEARS_EDUCATION))#831 values
 
-#remove duplicated rows
-demo_hep_c_patients <- demo_hep_c_patients[!duplicated(demo_hep_c_patients),] #3785 rows
+#Gender 
+hep_c_pts_gender <- as.data.frame(table(demo_hep_c_patients$Gender))
+hep_c_pts_gender$Percent <- hep_c_pts_gender$Freq / length(unique(demo_hep_c_patients$PATIENT_ID))
 
-demo_hep_c_patients[order(demo_hep_c_patients$PATIENT_ID),]
+#RAce
+hep_c_pts_race <- as.data.frame(table(demo_hep_c_patients$Race))
+hep_c_pts_race$Percent <- hep_c_pts_race$Freq / length(unique(demo_hep_c_patients$PATIENT_ID))
 
-#find hep c patients listed with demographic data more than once
-demo_hep_c_patients[duplicated(demo_hep_c_patients$PATIENT_ID),]#0 ids
+#Ethnicity
+hep_c_pts_ethnicity <- as.data.frame(table(demo_hep_c_patients$Ethnicity))
+hep_c_pts_ethnicity$Percent <- hep_c_pts_ethnicity$Freq / length(unique(demo_hep_c_patients$PATIENT_ID))
 
-demo_freq <- as.data.frame(table(demo_hep_c_patients$PATIENT_ID))#3785 unique id's
+#Marital Status
+hep_c_pts_Marital_Status <- as.data.frame(table(demo_hep_c_patients$Marital_Status))
+hep_c_pts_Marital_Status$Percent <- hep_c_pts_Marital_Status$Freq / length(unique(demo_hep_c_patients$PATIENT_ID))
+
+#Language
+hep_c_pts_language <- as.data.frame(table(demo_hep_c_patients$language))
+hep_c_pts_language$Percent <- hep_c_pts_language$Freq / length(unique(demo_hep_c_patients$PATIENT_ID))
+
+#Education
+hep_c_pts_YEARS_EDUCATION <- as.data.frame(table(demo_hep_c_patients$YEARS_EDUCATION))
+hep_c_pts_YEARS_EDUCATION$Percent <- hep_c_pts_YEARS_EDUCATION$Freq / length(unique(demo_hep_c_patients$PATIENT_ID))
+                                     
+#Death Rate
+sum(!is.na(demo_hep_c_patients$DOD_DS))
 
 
-demo_hep_c_patients <- merge(demo_hep_c_patients, education, by = "PATIENT_ID", all.x = TRUE, all.y = FALSE)
 
-sum(is.na(demo_hep_c_patients$YEARS_EDUCATION))#2883 missing
+################Demo data for Non Hep C patients only##############
 
-table(demo_hep_c_patients$Race)
-table(demo_hep_c_patients$Ethnicity)
-table(demo_hep_c_patients$language)
-table(demo_hep_c_patients$Marital_Status)
-sum(!is.na(demo_hep_c_patients$DOD_DS))#408 have died
-table(demo_hep_c_patients$YEARS_EDUCATION)
+non_hep_c_patients_demo <- demo[!demo$PATIENT_ID %in% hep_c_patients_ids_first_hep_c_encounter_date$PATIENT_ID,]
+dim(non_hep_c_patients_demo)
+
+
+#Combining demo table and education table
+demo_non_hep_c_patients <- merge(non_hep_c_patients_demo, education, by = "PATIENT_ID", all.x = TRUE, all.y = FALSE)
+dim(demo_non_hep_c_patients)
+sum(!is.na(demo_non_hep_c_patients$YEARS_EDUCATION))#12769 values
+
+#Gender 
+non_hep_c_pts_gender <- as.data.frame(table(demo_non_hep_c_patients$Gender))
+non_hep_c_pts_gender$Percent <- non_hep_c_pts_gender$Freq / length(unique(demo_non_hep_c_patients$PATIENT_ID))
+
+#RAce
+non_hep_c_pts_race <- as.data.frame(table(demo_non_hep_c_patients$Race))
+non_hep_c_pts_race$Percent <- non_hep_c_pts_race$Freq / length(unique(demo_non_hep_c_patients$PATIENT_ID))
+
+#Ethnicity
+non_hep_c_pts_ethnicity <- as.data.frame(table(demo_non_hep_c_patients$Ethnicity))
+non_hep_c_pts_ethnicity$Percent <- non_hep_c_pts_ethnicity$Freq / length(unique(demo_non_hep_c_patients$PATIENT_ID))
+
+#Marital Status
+non_hep_c_pts_Marital_Status <- as.data.frame(table(demo_non_hep_c_patients$Marital_Status))
+non_hep_c_pts_Marital_Status$Percent <- non_hep_c_pts_Marital_Status$Freq / length(unique(demo_non_hep_c_patients$PATIENT_ID))
+
+#Language
+non_hep_c_pts_language <- as.data.frame(table(demo_non_hep_c_patients$language))
+non_hep_c_pts_language$Percent <- non_hep_c_pts_language$Freq / length(unique(demo_non_hep_c_patients$PATIENT_ID))
+
+#Education
+non_hep_c_pts_YEARS_EDUCATION <- as.data.frame(table(demo_non_hep_c_patients$YEARS_EDUCATION))
+non_hep_c_pts_YEARS_EDUCATION$Percent <- non_hep_c_pts_YEARS_EDUCATION$Freq / length(unique(demo_non_hep_c_patients$PATIENT_ID))
+                                     
+#Death Rate
+sum(!is.na(demo_non_hep_c_patients$DOD_DS))
+
+#########Edcuation #####
+nrow(education[unique(education$PATIENT_ID),])
 ```
 
 ```{r}
